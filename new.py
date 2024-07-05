@@ -1,11 +1,11 @@
 from textual.app import App, ComposeResult
-from textual.widgets import Footer, Label, Tabs, Input, Select, SelectionList, Button, RadioButton, RadioSet, Static
+from textual.widgets import Footer, Label, Tabs, Input, Select, SelectionList, Button, RadioButton, RadioSet, Static, Pretty, Sparkline
 from textual.containers import ScrollableContainer
 from textual import on
 from textual import log
 import sqlite3
 from enum import Enum
-
+import json
 
 
 Steps = [
@@ -58,8 +58,8 @@ conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
 
 class TabsApp(App):
 
-    ml_config = {'name': "Demo", 'type': Type.regression, 'algo': "linear_regression", 'table': "resultsMY", 'target': []}
-    c_names = conn.execute("select name from pragma_table_info('resultsMY');").fetchall()
+    ml_config = {'name': "Demo", 'type': Type.regression, 'algo': "linear_regression", 'table': "results", 'target': []}
+    c_names = conn.execute("select name from pragma_table_info('results');").fetchall()
     # f_list = [(name[0], idx, False) for idx, name in enumerate(c_names)]
     t_list = [(name[0], idx, False) for idx, name in enumerate(c_names)]
     def generate_ml_sql(self, is_training = True):
@@ -83,6 +83,13 @@ class TabsApp(App):
             training;
             """.format(name=self.ml_config['name'], type=self.ml_config['type'].name, algo=self.ml_config['algo'], table= self.ml_config['table'], target=self.ml_config['target'][0])
             print(smt)
+            test = conn.execute(smt).fetchone()[0]
+            data = json.loads(test)
+            self.query_one(Pretty).update(test)
+            l = [float(data["score"])*100, 22, 39]
+            print(float(data["score"]))
+            self.query_one(Sparkline).data = l
+
 
     CSS = """
     Tabs {
@@ -149,7 +156,7 @@ class TabsApp(App):
         yield ScrollableContainer(RadioSet(RadioButton("Regression", value=self.ml_config['type'].value),
                                            RadioButton("Classification", value=not self.ml_config['type'].value)),
                                   Select((line, line) for line in LINES),  SelectionList[int](id="test2"))
-        yield Button(id="training-bt", label="Training")
+        yield ScrollableContainer(Button(id="training-bt", label="Training"), Pretty(""), Sparkline())
         yield Footer()
 
     def on_mount(self) -> None:

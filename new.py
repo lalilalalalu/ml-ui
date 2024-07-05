@@ -1,5 +1,6 @@
 from textual.app import App, ComposeResult
 from textual.widgets import Footer, Label, Tabs, Input, Select, SelectionList, Button, RadioButton, RadioSet, Static
+from textual.containers import ScrollableContainer
 from textual import on
 from textual import log
 import sqlite3
@@ -52,25 +53,23 @@ class Type(Enum):
     regression = True
 
 
-class TargetAndFeatures(Static):
-    def compose(self) -> ComposeResult:
-        yield SelectionList[int](id="test")
-        yield SelectionList[int](id="test2")
-
+conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
 
 
 class TabsApp(App):
-    conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
-    ml_config = {'name': "Demo", 'type': Type.regression, 'algo': "linear_regression", 'table': "resultsMY", 'target': "WRbwmaxMiB"}
 
+    ml_config = {'name': "Demo", 'type': Type.regression, 'algo': "linear_regression", 'table': "resultsMY", 'target': []}
+    c_names = conn.execute("select name from pragma_table_info('resultsMY');").fetchall()
+    # f_list = [(name[0], idx, False) for idx, name in enumerate(c_names)]
+    t_list = [(name[0], idx, False) for idx, name in enumerate(c_names)]
     def generate_ml_sql(self, is_training = True):
         from sqlite_ml.sqml import SQML
         # setup sqlite-ml extension
         sqml = SQML()
-        sqml.setup_schema(self.conn)
-        sqml.register_functions(self.conn)
+        sqml.setup_schema(conn)
+        sqml.register_functions(conn)
         # execute sqlite-ml functions
-        print(self.conn.execute("SELECT sqml_python_version();").fetchone()[0])
+        print(conn.execute("SELECT sqml_python_version();").fetchone()[0])
         if is_training:
             smt = """
             SELECT sqml_train(
@@ -82,7 +81,7 @@ class TabsApp(App):
             )
             AS
             training;
-            """.format(name=self.ml_config['name'], type=self.ml_config['type'].name, algo=self.ml_config['algo'], table= self.ml_config['table'], target=self.ml_config['target'])
+            """.format(name=self.ml_config['name'], type=self.ml_config['type'].name, algo=self.ml_config['algo'], table= self.ml_config['table'], target=self.ml_config['target'][0])
             print(smt)
 
     CSS = """
@@ -91,16 +90,21 @@ class TabsApp(App):
     }
     Screen {
         layout: grid;
-        grid-size: 2;
+        grid-size: 1;
         align: center top;
     }
-
+    
+    ScrollableContainer {
+        layout: grid;
+        grid-size: 3;
+        align: left top;
+    }
     Input {
         margin:1 1;
-        height: 100%;
+        height:100%;
         background: $panel;
         border: tall $primary;
-        content-align: center middle;
+        content-align: center top;
     }
         
     Select {
@@ -108,14 +112,30 @@ class TabsApp(App):
         height: 100%;
         background: $panel;
         border: tall $primary;
+        content-align: center top;
+    }
+    
+    RadioSet{
+        margin:1 1;
+        height: 100%;
+        width: 100%;
+        background: $panel;
+        border: tall $primary;
         content-align: center middle;
     }
     
     SelectionList {
-    padding: 1;
-    border: solid $accent;
-    width: 1fr;
+     margin:1 1;
+        background: $panel;
+        border: tall $primary;
 }
+
+ #training-bt {
+    margin: 1 1;
+    width: 1fr;
+    height: auto;
+
+ }
 
     #two {
     column-span: 2;
@@ -126,15 +146,27 @@ class TabsApp(App):
     def compose(self) -> ComposeResult:
         yield Tabs(Steps[0], Steps[1])
         yield Input(placeholder="ML Workflow name", type="text", value=self.ml_config['name'])
-        with RadioSet():
-            yield RadioButton("Regression", value=self.ml_config['type'].value)
-            yield RadioButton("Classification", value=not self.ml_config['type'].value)
-        yield Select((line, line) for line in LINES)
-        yield SelectionList[int](id="test")
-        yield SelectionList[int](id="test2")
-
-        yield Button("Training")
+        yield ScrollableContainer(RadioSet(RadioButton("Regression", value=self.ml_config['type'].value),
+                                           RadioButton("Classification", value=not self.ml_config['type'].value)),
+                                  Select((line, line) for line in LINES),  SelectionList[int](id="test2"))
+        yield Button(id="training-bt", label="Training")
         yield Footer()
+
+    def on_mount(self) -> None:
+
+        self.query_one(Tabs).focus()
+        self.query_one(Input).border_title="ML Task name:"
+        self.query_one(RadioSet).border_title = "ML Task Type:"
+        self.query_one(Select).border_title = "ML Task Algorithm:"
+        """
+        self.query_one("#test", SelectionList).border_title="feature selection"
+        self.query_one("#test", SelectionList).add_options(f_list)
+        self.query_one("#test", SelectionList).visible = False
+        """
+        self.query_one("#test2", SelectionList).border_title = "target selection"
+        self.query_one("#test2", SelectionList).add_options(self.t_list)
+        self.query_one("#test2", SelectionList).visible = False
+
 
     @on(Input.Changed)
     def show_invalid_reasons(self, event: Input.Changed) -> None:
@@ -145,8 +177,10 @@ class TabsApp(App):
         self.ml_config['algo'] = event.value
         select_t = self.query_one("#test2", SelectionList)
         select_t.visible = True
+        """
         select_f = self.query_one("#test", SelectionList)
         select_f.visible = True
+        """
 
     @on(RadioSet.Changed)
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
@@ -162,18 +196,13 @@ class TabsApp(App):
         else:
             select.set_options((line, line) for line in LINES2)
 
-    def on_mount(self) -> None:
-        c_names = self.conn.execute("select name from pragma_table_info('resultsMY');").fetchall()
-        f_list = [(name[0], idx, False) for idx, name in enumerate(c_names)]
-        t_list = [(name[0], idx, False) for idx, name in enumerate(c_names)]
-        self.query_one(Tabs).focus()
-        self.query_one("#test", SelectionList).border_title="feature selection"
-        self.query_one("#test", SelectionList).add_options(f_list)
-        self.query_one("#test", SelectionList).visible = False
-        self.query_one("#test2", SelectionList).border_title = "target selection"
-        self.query_one("#test2", SelectionList).add_options(t_list)
-        self.query_one("#test2", SelectionList).visible = False
-
+    @on(SelectionList.SelectedChanged)
+    def update_selected_view(self) -> None:
+        selected_items = self.query_one(SelectionList).selected
+        print(selected_items)
+        selected = [self.t_list[idx][0] for idx in selected_items] if selected_items else []
+        self.ml_config['target'] = selected
+        print(self.ml_config['target'])
 
     def on_tabs_tab_activated(self, event: Tabs.TabActivated) -> None:
         if event.tab is None:
@@ -181,7 +210,6 @@ class TabsApp(App):
             print("is None")
         else:
             print("is tab", event.tab)
-
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.generate_ml_sql()

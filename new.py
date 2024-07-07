@@ -116,6 +116,7 @@ OptionList {
 }
     
     #ex_sec {
+        column-span: 3;
         margin: 1 1;
         width: 1fr;
         height: auto;
@@ -137,9 +138,9 @@ OptionList {
         """
 
     def compose(self) -> ComposeResult:
-        with TabbedContent("Training", "Predication"):
+        with TabbedContent("Training", "Prediction"):
             yield TrainingTab()
-            yield PredicationTab()
+            yield PredictionTab()
         yield Footer()
 
     def on_mount(self) -> None:
@@ -254,30 +255,36 @@ def format_data(sql_results):
     formatted_list = []
     for entry in sql_results:
         print("entries: ", entry)
-        """
-        experiment_id, name, prediction_type, algorithm, dataset, target  = entry
-        formatted_string = f"ID: {experiment_id} / NAME: {name} / Type: {prediction_type} - Algorithm: {algorithm} / Dataset: {dataset} / Target: {target}"
+
+        experiment_id, name, c_date, u_date, algorithm, dataset, target = entry
+        formatted_string = f"ID: {experiment_id} / NAME: {name} / Algorithm: {algorithm} / Dataset: {dataset} / Target: {target} - DATE: [{c_date}::{u_date}]"
         """
         id, c_date, u_date, name, prediction_type = entry
         formatted_string = f"ID: {id} / NAME: {name} / Type: {prediction_type} - DATE: [{c_date}::{u_date}]"
+        """
+
         formatted_list.append(formatted_string)
     return formatted_list
 
 
 def parse_experiment_to_dic(s):
-    pattern = r"ID: (\d+) / NAME: ([\w\s]+) / Type: \w+ - DATE: \[.*?::(.*?)\]"
+    pattern = r"ID: (\d+) / NAME: ([\w\s]+) / Algorithm: (\w+) / Dataset: (\w+) / Target: ([\w]+) - DATE: \[(.*?)::(.*?)\]"
     match = re.match(pattern, s)
     if match:
         return {
             "ex_id": match.group(1),
             "ex_name": match.group(2),
-            "ex_u_date": match.group(3)
+            "algorithm": match.group(3),
+            "dataset": match.group(4),
+            "target": match.group(5),
+            "create_date": match.group(6),
+            "update_date": match.group(7)
         }
     else:
         raise ValueError("String does not match the expected format")
 
 
-class PredicationTab(Static):
+class PredictionTab(Static):
     predict_config = {'name': "Demo877888", 'table': "results", 'feature_str': ""}
 
     def generate_predict_sql(self, is_training=True):
@@ -323,36 +330,63 @@ class PredicationTab(Static):
         yield ScrollableContainer(Button(id="predict-bt", label="Prediction"), Pretty(""), Sparkline())#
 
     def on_mount(self) -> None:
+        s_smt = """
+        SELECT experiment_id, name, created_at, updated_at, algorithm, dataset, target
+        FROM (
+            SELECT *
+            FROM sqml_experiments se
+            INNER JOIN sqml_runs sr
+            ON se.id = sr.experiment_id
+            WHERE se.updated_at = sr.updated_at
+        );
         """
-        s_smt ="SELECT experiment_id, name, prediction_type, algorithm, dataset, target  from (Select * FROM sqml_experiments se INNER JOIN sqml_runs sr on se.id = sr.experiment_id WHERE se.updated_at = sr.updated_at););"
         results = conn.execute(s_smt).fetchall()
-
         """
         results = conn.execute("select * from ('sqml_experiments');").fetchall()
+        """
         select = self.query_one("#ex_sec", Select)
         select.border_title = "Model selection"
         select.set_options((line, line) for line in format_data(results))
         sec_list = self.query_one('#ex_sec_list', SelectionList)
-        sec_list.border_title = "features selection"
+        sec_list.border_title = "Selected features "
         sec_list.add_options(f_list)
+        sec_list.visible=False
 
     @on(Select.Changed)
     def select_changed(self, event: Select.Changed) -> None:
         s_string = event.value
+        print("new_string", s_string)
         select_ex = parse_experiment_to_dic(s_string)
-        get_target_smt = """select target from ('sqml_runs') 
-        where experiment_id = {ex_id} and updated_at = '{ex_u_date}';
-        """.format(ex_id=select_ex['ex_id'], ex_u_date=select_ex['ex_u_date'])
-        print("get_target_smt:", get_target_smt)
-        results = conn.execute(get_target_smt).fetchall()
-        for result in results:
-            print("result123: ", result)
+        sec_list = self.query_one('#ex_sec_list', SelectionList)
+        sec_list.visible = False
+        """
+        for i, f in enumerate(f_list):
+            if str(f[0]) == select_ex['target']:  # Assuming target is the second element in the tuple
+                f_l = list(f)
+                f_l[2] = False  # Update the value
+                f_list[i] = tuple(f_l)  # Assign the modified tuple back to the list
+                print("found:", f_list[i])
+        
+        """
+        sec_list.clear_options()
+        b_f_list = [f for f in f_list if str(f[0]) != select_ex['target']]
+        sec_list.add_options(b_f_list)
+        """
+        print("print-fs")
+        for n in b_f_list:
+            print(n)
+        """
+        sec_list.visible = True
 
+        """
+        get_target_smt = "select target from ('sqml_runs') where experiment_id = {ex_id} and updated_at = '{ex_u_date}';"
+        .format(ex_id=select_ex['ex_id'], ex_u_date=select_ex['ex_u_date'])
+        print("get_target_smt:", get_target_smt)
+        """
         """
         select_f = self.query_one("#test", SelectionList)
         select_f.visible = True
         """
-
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
         selected_items = self.query_one('#ex_sec_list', SelectionList).selected

@@ -2,17 +2,14 @@ from __future__ import annotations
 
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
-from textual.widgets import Footer, Label, Tabs, Input, Select, SelectionList, Button, RadioButton, RadioSet, Static, \
-    Pretty, Sparkline, TabbedContent, OptionList, Header, DataTable
+from textual.widgets import Footer, Input, Select, SelectionList, RadioButton, RadioSet, Static, \
+    Pretty, TabbedContent, DataTable
 from textual.binding import Binding
 from textual import events
-from rich.table import Table
 from textual.containers import ScrollableContainer
 from textual import on
-from textual import log
 import sqlite3
 from enum import Enum
-import json
 import re
 
 
@@ -392,9 +389,6 @@ class PredictionTab(Static):
     def update_selected_view(self) -> None:
         selected_items = self.query_one('#ex_sec_list', SelectionList).selected
         # self.predict_config = [f_list[idx][0] for idx in selected_items] if selected_items else []
-
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.generate_predict_sql()
 
 
 if __name__ == "__main__":

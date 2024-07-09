@@ -56,9 +56,9 @@ LIMIT 1;""".format(f_str=f_str)
 
     test_3 = """
     SELECT
-      results.*,
-      batch.value AS prediction,
-      results.WRbwminMiB = batch.value AS match
+       results.*,
+       batch.value AS prediction,
+       results.WRbwminMiB = batch.value AS match
     FROM
       results
       JOIN json_each (
@@ -67,19 +67,23 @@ LIMIT 1;""".format(f_str=f_str)
             sqml_predict_batch(
               'Demo877888',
               json_group_array(
-                 json_object('WRbwmaxMiB', [WRbwmaxMiB], 'WRbwmeanMiB', [WRbwmeanMiB], 'WRiopsmaxOPS', [WRiopsmaxOPS], 'WRiopsminOPS', [WRiopsminOPS], 'WRiopsmeanOPS', [WRiopsmeanOPS], 'RDbwmaxMiB', [RDbwmaxMiB], 'RDbwminMiB', [RDbwminMiB], 'RDbwmeanMiB', [RDbwmeanMiB], 'RDiopsmaxOPS', [RDiopsmaxOPS], 'RDiopsminOPS', [RDiopsminOPS],'RDiopsmeanOPS', [RDiopsmeanOPS])
+                 json_object('WRbwmaxMiB', [WRbwmaxMiB], 'WRbwmeanMiB', [WRbwmeanMiB], 'WRiopsmaxOPS', [WRiopsmaxOPS], 
+                 'WRiopsminOPS', [WRiopsminOPS], 'WRiopsmeanOPS', [WRiopsmeanOPS], 'RDbwmaxMiB', [RDbwmaxMiB], 
+                 'RDbwminMiB', [RDbwminMiB], 'RDbwmeanMiB', [RDbwmeanMiB], 'RDiopsmaxOPS', [RDiopsmaxOPS], 
+                 'RDiopsminOPS', [RDiopsminOPS],'RDiopsmeanOPS', [RDiopsmeanOPS])
               )
             )
           FROM
             results
         )
       ) batch ON (batch.rowid + 1) = results.rowid
-    WHERE match = True;
+    WHERE match = False;
         """
 
     print(new_smt)
-    testot = conn.execute(test_3).fetchall()
-    for t in testot:
-        print(t[0])
-    print(testot)
+    results = conn.execute(test_3).fetchall()
+    for idx, row in enumerate(results):
+        print(tuple(row))
+        print("---------%i-----------" %idx)
+    #print(testot)
 

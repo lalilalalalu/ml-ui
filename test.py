@@ -47,9 +47,45 @@ def multiple_linear_regression(dependent_variable_name, independent_variable_nam
 
 
 if __name__ == '__main__':
-    conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
-    df = pd.read_sql_query("SELECT * FROM results", conn)
-    indep = ['WRbwmaxMiB', 'WRbwminMiB', 'WRbwmeanMiB', 'WRiopsmaxOPS', 'WRiopsminOPS', 'WRiopsmeanOPS', 'RDbwmaxMiB', 'RDbwminMiB', 'RDbwmeanMiB', 'RDiopsmaxOPS', 'RDiopsminOPS', 'RDiopsmeanOPS']
-    dp = 'RDbwmaxMiB'
-    multiple_linear_regression(dependent_variable_name=dp, independent_variable_names=indep, dataframe=df, show_dependency=True)
+    #conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
+    #df = pd.read_sql_query("SELECT * FROM results", conn)
+    #indep = ['WRbwmaxMiB', 'WRbwminMiB', 'WRbwmeanMiB', 'WRiopsmaxOPS', 'WRiopsminOPS', 'WRiopsmeanOPS', 'RDbwmaxMiB', 'RDbwminMiB', 'RDbwmeanMiB', 'RDiopsmaxOPS', 'RDiopsminOPS', 'RDiopsmeanOPS']
+    #dp = 'RDbwmaxMiB'
+    #multiple_linear_regression(dependent_variable_name=dp, independent_variable_names=indep, dataframe=df, show_dependency=True)
+
+    LR = """linear_regression
+           sgd
+           ridge
+           ridge_cv
+           elastic_net
+           elastic_net_cv
+           lasso
+           lasso_cv
+           decision_tree
+           ada_boost
+           bagging
+           random_forest
+           gradient_boosting
+           knn
+           mlp
+           svr""".splitlines()
+
+    RG = """logistic_regression
+        sgd
+        ridge
+        ridge_cv
+        decision_tree
+        ada_boost
+        bagging
+        decision_tree
+        ada_boost
+        bagging
+        gradient_boosting
+        random_forest
+        knn
+        mlp
+        svc""".splitlines()
+    print(LR)
+    print(RG)
+
 

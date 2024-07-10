@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from textual.app import App, ComposeResult
-from textual.css.query import NoMatches
+from textual.css.query import NoMatches, TooManyMatches
 from textual.widgets import Footer, Input, Select, SelectionList, RadioButton, RadioSet, Static, \
     Pretty, TabbedContent, DataTable
 from textual.binding import Binding
@@ -13,18 +13,18 @@ from enum import Enum
 import re
 
 
+
 class Type(Enum):
     classification = False
     regression = True
 
 
-conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
-c_names = conn.execute("select name from pragma_table_info('results');").fetchall()
-t_list = [(name[0], idx, False) for idx, name in enumerate(c_names)]
-f_list = [(name[0], idx, True) for idx, name in enumerate(c_names)]
+class TabsApp(App[None]):
 
+    def __init__(self, conn) -> None:
+        self.conn = conn
+        super().__init__()
 
-class TabsApp(App):
     BINDINGS = [
         Binding(key="q", action="quit", description="Quit the app"),
         Binding(
@@ -37,67 +37,66 @@ class TabsApp(App):
     ]
 
     CSS = """
-         Tabs {
-             dock: top;
+             Tabs {
+                 dock: top;
+             }
+
+             ScrollableContainer {
+                 layout: grid;
+                 grid-size: 6;
+                 align: left top;
+             }
+
+             Input {
+                column-span: 4;
+                 margin:1 1;
+                 height:100%;
+                 border: tall $primary;
+                 content-align: center top;
+             }
+
+             Select {
+             column-span: 4;
+                 margin:1 1;
+                 height: 100%;
+                 background: $panel;
+                 border: tall $primary;
+                 content-align: center top;
+             }
+
+             RadioSet{
+                column-span: 2;
+                 margin:1 1;
+                 height: 100%;
+                 width: 100%;
+                 background: $panel;
+                 border: tall $primary;
+             }
+
+             Pretty{
+                 column-span: 6;
+                 margin:1 1;
+                 background: $panel;
+                 border: tall $primary;
+                 content-align: center middle;
+             }
+
+             SelectionList {
+                column-span: 2;
+                 height:100%;
+                 margin:1 1;
+                 background: $panel;
+                 border: tall $primary;
          }
 
-         ScrollableContainer {
-             layout: grid;
-             grid-size: 6;
-             align: left top;
+         DataTable
+         {       column-span: 6;
+                 margin:1 1;
+                 background: $panel;
+                 border: tall $primary;
          }
 
-         Input {
-            column-span: 4;
-             margin:1 1;
-             height:100%;
-             border: tall $primary;
-             content-align: center top;
-         }
-
-         Select {
-         column-span: 4;
-             margin:1 1;
-             height: 100%;
-             background: $panel;
-             border: tall $primary;
-             content-align: center top;
-         }
-
-         RadioSet{
-            column-span: 2;
-             margin:1 1;
-             height: 100%;
-             width: 100%;
-             background: $panel;
-             border: tall $primary;
-         }
-
-         Pretty{
-             margin:1 1;
-             height: 100%;
-             width: 100%;
-             background: $panel;
-             border: tall $primary;
-             content-align: center middle;
-         }
-
-         SelectionList {
-            column-span: 2;
-             height:100%;
-             margin:1 1;
-             background: $panel;
-             border: tall $primary;
-     }
-
-     DataTable
-     {
-             margin:1 1;
-             background: $panel;
-             border: tall $primary;
-     }
-     
-         """
+             """
 
     def on_key(self, event: events.Key) -> None:
         if event.key == "ctrl+p":
@@ -106,9 +105,6 @@ class TabsApp(App):
         elif event.key == "ctrl+t":
             tt = self.query_one(TrainingTab)
             tt.generate_ml_sql()
-
-    def on_mouse_move(self, event: events.MouseMove) -> None:
-        pass
 
     def action_training(self):
         tt = self.query_one(TrainingTab)
@@ -120,9 +116,10 @@ class TabsApp(App):
 
     def compose(self) -> ComposeResult:
         # yield Header()
+        c_names = self.conn.execute("select name from pragma_table_info('results');").fetchall()
         with TabbedContent("Training", "Prediction"):
-            yield TrainingTab()
-            yield PredictionTab()
+            yield TrainingTab(self.conn, c_names)
+            yield PredictionTab(self.conn, c_names)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -146,65 +143,57 @@ class TabsApp(App):
 
 
 class TrainingTab(Static):
-    LR = """
-    linear_regression
-    sgd
-    ridge
-    ridge_cv
-    elastic_net
-    elastic_net_cv
-    lasso
-    lasso_cv
-    decision_tree
-    ada_boost
-    bagging
-    random_forest
-    gradient_boosting
-    knn
-    mlp
-    svr""".splitlines()
-    RG = """
-    sgd
-    ridge
-    ridge_cv
-    elastic_net
-    elastic_net_cv
-    lasso
-    lasso_cv
-    decision_tree
-    ada_boost
-    bagging
-    random_forest
-    gradient_boosting
-    knn
-    mlp
-    svr""".splitlines()
+    def __init__(self, conn, c_names) -> None:
+        self.conn = conn
+        self.c_names = c_names
+        self.t_list = [(name[0], idx, False) for idx, name in enumerate(self.c_names)]
+        super().__init__()
+
+    LR = ['linear_regression', 'sgd', 'ridge', 'ridge_cv', 'elastic_net', 'elastic_net_cv', 'lasso', 'lasso_cv',
+          'decision_tree', 'ada_boost', 'bagging', 'random_forest', 'gradient_boosting', 'knn', 'mlp', 'svr']
+
+    RG = ['logistic_regression', 'sgd', 'ridge', 'ridge_cv', 'decision_tree', 'ada_boost', 'bagging',
+          'decision_tree', 'ada_boost', 'bagging', 'gradient_boosting', 'random_forest', 'knn', 'mlp', 'svc']
     ml_config = {'name': "Demo", 'type': Type.regression, 'algo': "linear_regression", 'table': "results", 'target': []}
 
     def generate_ml_sql(self, is_training=True):
         from sqlite_ml.sqml import SQML
         # setup sqlite-ml extension
         sqml = SQML()
-        sqml.setup_schema(conn)
-        sqml.register_functions(conn)
-        if is_training:
+        sqml.setup_schema(self.conn)
+        sqml.register_functions(self.conn)
+        slist = self.query_one("#test2", SelectionList)
+        if len(self.ml_config['target']) <1:
+            slist.styles.border = ("tall", "red")
+        else:
+            slist.styles.border = ("tall", "$primary")
             smt = """
-                SELECT sqml_train(
-                    '{name}',
-                    '{type}',
-                    '{algo}',
-                    '{table}',
-                    '{target}'
-                )
-                AS
-                training;
-                """.format(name=self.ml_config['name'], type=self.ml_config['type'].name, algo=self.ml_config['algo'],
-                           table=self.ml_config['table'], target=self.ml_config['target'][0])
+                       SELECT sqml_train(
+                           '{name}',
+                           '{type}',
+                           '{algo}',
+                           '{table}',
+                           '{target}'
+                       )
+                       AS
+                       training;
+                       """.format(name=self.ml_config['name'], type=self.ml_config['type'].name,
+                                  algo=self.ml_config['algo'],
+                                  table=self.ml_config['table'], target=self.ml_config['target'][0])
             print(smt)
-            results = conn.execute(smt).fetchone()[0]
-            self.mount(Pretty(""))
-            self.query_one(Pretty).update(results)
-            self.query_one(Pretty).border_title = "Training Output:"
+            results = self.conn.execute(smt).fetchone()[0]
+            try:
+                self.query_one("#sc_pre", ScrollableContainer)
+            except NoMatches:
+                self.mount(ScrollableContainer(id="sc_pre"))
+            sc_pre = self.query_one("#sc_pre", ScrollableContainer)
+            try:
+                self.query_one("#pretty_result", Pretty)
+            except NoMatches:
+                sc_pre.mount(Pretty("", id="pretty_result"))
+            pretty_result = self.query_one("#pretty_result", Pretty)
+            pretty_result.update(results)
+            pretty_result.border_title = "Training Output:"
 
     def compose(self) -> ComposeResult:
         yield ScrollableContainer(Input(placeholder="ML Workflow name", type="text", value=self.ml_config['name']),
@@ -219,7 +208,7 @@ class TrainingTab(Static):
         self.query_one(RadioSet).border_title = "ML Task Type:"
         self.query_one(Select).border_title = "ML Task Algorithm:"
         self.query_one("#test2", SelectionList).border_title = "target selection"
-        self.query_one("#test2", SelectionList).add_options(t_list)
+        self.query_one("#test2", SelectionList).add_options(self.t_list)
         self.query_one("#test2", SelectionList).disabled = True
 
     @on(Input.Changed)
@@ -234,12 +223,10 @@ class TrainingTab(Static):
 
     @on(RadioSet.Changed)
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
-        print("toggle_change:", self.ml_config['type'])
         if self.ml_config['type'] == Type.regression:
             self.ml_config['type'] = Type.classification
         else:
             self.ml_config['type'] = Type.regression
-        print("toggle_change:", self.ml_config['type'])
         select = self.query_one(Select)
         if self.ml_config['type'].value:
             select.set_options((line, line) for line in self.LR)
@@ -249,17 +236,13 @@ class TrainingTab(Static):
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
         selected_items = self.query_one(SelectionList).selected
-        print(selected_items)
-        selected = [t_list[idx][0] for idx in selected_items] if selected_items else []
+        selected = [self.t_list[idx][0] for idx in selected_items] if selected_items else []
         self.ml_config['target'] = selected
-        print(self.ml_config['target'])
 
 
 def format_data(sql_results):
     formatted_list = []
     for entry in sql_results:
-        print("entries: ", entry)
-
         experiment_id, name, c_date, u_date, algorithm, dataset, target = entry
         formatted_string = f"ID: {experiment_id} / NAME: {name} / Algorithm: {algorithm} / Dataset: {dataset} / Target: {target} - DATE: [{c_date}::{u_date}]"
         formatted_list.append(formatted_string)
@@ -283,69 +266,78 @@ def parse_experiment_to_dic(s):
         raise ValueError("String does not match the expected format")
 
 
-def get_avail_experiments():
-    s_smt = """
-    SELECT experiment_id, name, created_at, updated_at, algorithm, dataset, target
-    FROM (
-        SELECT *
-        FROM sqml_experiments se
-        INNER JOIN sqml_runs sr
-        ON se.id = sr.experiment_id
-        WHERE se.updated_at = sr.updated_at
-    );
-    """
-    return conn.execute(s_smt).fetchall()
-
-
 class PredictionTab(Static):
+    def __init__(self, conn, c_name) -> None:
+        self.conn = conn
+        self.c_names = c_name
+        self.f_list = [(name[0], idx, True) for idx, name in enumerate(self.c_names)]
+        super().__init__()
+
     predict_config = {}
     rows = []
+
+    def get_avail_experiments(self):
+        s_smt = """
+            SELECT experiment_id, name, created_at, updated_at, algorithm, dataset, target
+            FROM (
+                SELECT *
+                FROM sqml_experiments se
+                INNER JOIN sqml_runs sr
+                ON se.id = sr.experiment_id
+                WHERE se.updated_at = sr.updated_at
+            );
+            """
+        return self.conn.execute(s_smt).fetchall()
 
     def generate_predict_sql(self):
         from sqlite_ml.sqml import SQML
         # setup sqlite-ml extension
         sqml = SQML()
-        sqml.setup_schema(conn)
-        sqml.register_functions(conn)
+        sqml.setup_schema(self.conn)
+        sqml.register_functions(self.conn)
         sub_smt = "json_object(" + ", ".join(
             re.escape("'") + f[0] + re.escape("'") + ', [' + f[0] + ']' for f in
             self.predict_config['features'][:-1]) + ',' + re.escape("'") + \
                   self.predict_config['features'][-1][0] + re.escape("'") + ', [' + self.predict_config['features'][-1][
                       0] + '])'
-        print("sub_smt:", sub_smt)
-
         smt_batched = """
-    SELECT
-      {table}.*,
-      batch.value AS prediction,
-      {table}.{target} = batch.value AS match
-    FROM
-      {table}
-      JOIN json_each (
-        (
-          SELECT
-            sqml_predict_batch(
-              '{name}',
-              json_group_array(
-              {features}
-              )
+        SELECT
+          {table}.*,
+          batch.value AS prediction,
+          {table}.{target} = batch.value AS match
+        FROM
+          {table}
+          JOIN json_each (
+            (
+              SELECT
+                sqml_predict_batch(
+                  '{name}',
+                  json_group_array(
+                  {features}
+                  )
+                )
+              FROM
+                {table}
             )
-          FROM
-            {table}
-        )
-      ) batch ON (batch.rowid + 1) = {table}.rowid
-    WHERE match = True;
-        """.format(name=self.predict_config['ex_name'], table=self.predict_config['dataset'], features=sub_smt,
-                   target=self.predict_config['target'])
-        print("sql_batched: ", smt_batched)
-        results = conn.execute(smt_batched).fetchall()
-
-        header = [name[0] for name in c_names] + ["prediction", "match"]
+          ) batch ON (batch.rowid + 1) = {table}.rowid
+        WHERE match = True;
+            """.format(name=self.predict_config['ex_name'], table=self.predict_config['dataset'], features=sub_smt,
+                       target=self.predict_config['target'])
+        results = self.conn.execute(smt_batched).fetchall()
+        header = [name[0] for name in self.c_names] + ["prediction", "match"]
         self.rows.append(tuple(header))
         for idx, row in enumerate(results):
             self.rows.append(tuple(row))
-        self.mount(DataTable())
-        table = self.query_one(DataTable)
+        try:
+            self.query_one("#sc_dt", ScrollableContainer)
+        except NoMatches:
+            self.mount(ScrollableContainer(id="sc_dt"))
+        sc_dt = self.query_one("#sc_dt", ScrollableContainer)
+        try:
+            self.query_one("#dt", DataTable)
+        except NoMatches:
+            sc_dt.mount(DataTable(id="dt"))
+        table = self.query_one("#dt", DataTable)
         table.add_columns(*self.rows[0])
         table.add_rows(self.rows[1:])
         table.border_title = "Prediction Results:"
@@ -354,10 +346,11 @@ class PredictionTab(Static):
         yield ScrollableContainer(Select([], id="ex_sec"), SelectionList(id="ex_sec_list"))
 
     def on_mount(self) -> None:
-        results = get_avail_experiments()
         select = self.query_one("#ex_sec", Select)
         select.border_title = "Model selection"
-        select.set_options((line, line) for line in format_data(results))
+        avail_ex = self.get_avail_experiments()
+        select.border_title = "Model selection"
+        select.set_options((line, line) for line in format_data(avail_ex))
         sec_list = self.query_one('#ex_sec_list', SelectionList)
         sec_list.border_title = "Selected features "
         sec_list.add_options([])
@@ -365,13 +358,16 @@ class PredictionTab(Static):
 
     @on(Select.Changed)
     def select_changed(self, event: Select.Changed) -> None:
+        try:
+            self.query_one(DataTable)
+        except NoMatches:
+            pass
+        else:
+            self.query_one(DataTable).remove()
         s_string = event.value
-        print("new_string", s_string)
         select_ex = parse_experiment_to_dic(s_string)
         self.predict_config = select_ex
-        global f_list
-        self.predict_config['features'] = [f for f in f_list if str(f[0]) != select_ex['target']]
-        print("last_selected: ", self.predict_config)
+        self.predict_config['features'] = [f for f in self.f_list if str(f[0]) != select_ex['target']]
         sec_list = self.query_one('#ex_sec_list', SelectionList)
         sec_list.clear_options()
         sec_list.add_options(self.predict_config['features'])
@@ -392,5 +388,6 @@ class PredictionTab(Static):
 
 
 if __name__ == "__main__":
-    app = TabsApp()
+    conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
+    app = TabsApp(conn)
     app.run()

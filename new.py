@@ -1,20 +1,3 @@
-from __future__ import annotations
-
-from textual.app import App, ComposeResult
-from textual.css.query import NoMatches
-from textual.widgets import Footer, Input, Select, SelectionList, RadioButton, RadioSet, Static, \
-    Pretty, TabbedContent, DataTable, Switch
-from textual.containers import Horizontal
-from textual.validation import Function, Length, ValidationResult, Validator
-from textual.color import Color
-from textual.binding import Binding
-from textual import events
-from textual.containers import ScrollableContainer
-from textual import on
-import sqlite3
-from enum import Enum
-import re
-
 from __future__ import (print_function,
                         unicode_literals,
                         division,
@@ -200,10 +183,11 @@ class TabsApp(App[None]):
     def compose(self) -> ComposeResult:
         # yield Header()
         c_names = get_table_columns(self.conn, self.table_name)
-        with TabbedContent("Training", "Prediction", "Preprocessing"):
+        with TabbedContent("Training", "Prediction", "Preprocessing", "Data Overview"):
             yield TrainingTab(self.conn)
             yield PredictionTab(self.conn, c_names)
             yield PrePrecessingTab(self.conn)
+            yield DataViewTab(self.conn)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -569,6 +553,55 @@ class PrePrecessingTab(Static):
         self.selected_columns = [str(select_list.get_option_at_index(selected_item).prompt) for selected_item in
                                  select_list.selected]
         self.table['column_names'] = self.selected_columns
+
+
+class DataViewTab(Static):
+    def __init__(self, conn) -> None:
+        self.conn = conn
+        super().__init__()
+
+    table = ""
+    selected_columns = []
+    df = pd.DataFrame()
+
+    def compose(self) -> ComposeResult:
+        yield ScrollableContainer(Select([], id="dv_table_sec"), SelectionList(id="dv_table_sec_list"))
+        yield ScrollableContainer(Pretty(id="dv_pretty", object={}))
+
+    def on_mount(self) -> None:
+        select = self.query_one("#dv_table_sec", Select)
+        select.border_title = "Origin table:"
+        select.set_options((line, line) for line in get_tables(self.conn))
+        table_sec_list = self.query_one('#dv_table_sec_list', SelectionList)
+        table_sec_list.border_title = "Selected columns:"
+
+    @on(Select.Changed)
+    def select_changed(self, event: Select.Changed) -> None:
+        self.table = event.value
+        col_names = get_table_columns(self.conn, self.table)
+        sl = self.query_one("#dv_table_sec_list", SelectionList)
+        sl.clear_options()
+        sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
+        # self.update_selected_view()
+
+        self.df = pd.read_sql_query("SELECT * from {table}".format(table=self.table), self.conn)
+        dv_pretty = self.query_one("#dv_pretty", Pretty)
+        dv_pretty.update(self.df.describe())
+        """
+        col_names = get_table_columns(self.conn, s_string)
+        sl = self.query_one("#table_sec_list", SelectionList)
+        sl.clear_options()
+        sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
+        """
+
+    @on(SelectionList.SelectedChanged)
+    def update_selected_view(self) -> None:
+        select_list = self.query_one("#dv_table_sec_list", SelectionList)
+        self.selected_columns = [str(select_list.get_option_at_index(selected_item).prompt) for selected_item in
+                                 select_list.selected]
+        dv_pretty = self.query_one("#dv_pretty", Pretty)
+        print("selected : ", self.selected_columns)
+        dv_pretty.update(self.df[self.selected_columns].describe())
 
 
 if __name__ == "__main__":

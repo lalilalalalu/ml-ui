@@ -43,7 +43,7 @@ def get_table_columns(conn, table="results"):
 
 class TabsApp(App[None]):
     table_name = "results"
-
+    tables = []
     def __init__(self, conn) -> None:
         self.conn = conn
         super().__init__()
@@ -183,16 +183,15 @@ class TabsApp(App[None]):
     def compose(self) -> ComposeResult:
         # yield Header()
         c_names = get_table_columns(self.conn, self.table_name)
-        with TabbedContent("Training", "Prediction", "Preprocessing", "Data Overview"):
+        with TabbedContent("Training", "Prediction", "Preprocessing"):
             yield TrainingTab(self.conn)
             yield PredictionTab(self.conn, c_names)
             yield PrePrecessingTab(self.conn)
-            yield DataViewTab(self.conn)
+            # yield DataViewTab(self.conn)
         yield Footer()
 
     def on_mount(self) -> None:
         self.query_one(TabbedContent).focus()
-        print("tabless:", get_tables(self.conn))
 
     def on_tabbed_content_tab_activated(self, event: TabbedContent.TabActivated) -> None:
         if event.tab is None:
@@ -213,15 +212,15 @@ class TabsApp(App[None]):
                 self.bind(keys="ctrl+o", action="pre_processing", description="Do Preprocessing", key_display="ctr + o",
                           show=False)
                 self.refresh_bindings()
+                self.query_one(TrainingTab).Unmount()
             elif event.pane.id == "tab-3":
                 self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
                           show=False)
                 self.bind(keys="ctrl+t", action="training", description="Do training", key_display="ctr + t",
                           show=False)
-                self.bind(keys="ctrl+o", action="pre_processing", description="Do Preprocessing", key_display="ctr + o",
+                self.bind(keys="ctrl+o", action="pre_processing", description="Create new table", key_display="ctr + o",
                           show=True)
                 self.refresh_bindings()
-
 
 class TrainingTab(Static):
     def __init__(self, conn) -> None:
@@ -339,7 +338,8 @@ def format_data(sql_results):
 
 
 def parse_experiment_to_dic(s):
-    pattern = r"ID: (\d+) / NAME: ([\w\s]+) / Algorithm: (\w+) / Dataset: (\w+) / Target: ([\w]+) - DATE: \[(.*?)::(.*?)\]"
+    print("error_s: ", s)
+    pattern = r"ID: (\d+) / NAME: ([\w\s\-_]+) / Algorithm: (\w+) / Dataset: ([\w\-_]+) / Target: ([\w\-_]+) - DATE: \[(.*?)::(.*?)\]"
     match = re.match(pattern, s)
     if match:
         return {
@@ -393,11 +393,11 @@ class PredictionTab(Static):
             sub_smt = "json_object(" + ", ".join( re.escape("'") + f[0] + re.escape("'") + ', [' + f[0] + '])' for f in self.predict_config['features'])
         smt_batched = """
         SELECT
-          {table}.*,
+          '{table}'.*,
           batch.value AS prediction,
-          {table}.{target} = batch.value AS match
+          '{table}'.{target} = batch.value AS match
         FROM
-          {table}
+          '{table}'
           JOIN json_each (
             (
               SELECT
@@ -408,9 +408,9 @@ class PredictionTab(Static):
                   )
                 )
               FROM
-                {table}
+                '{table}'
             )
-          ) batch ON (batch.rowid + 1) = {table}.rowid
+          ) batch ON (batch.rowid + 1) = '{table}'.rowid
         WHERE match = True;
             """.format(name=self.predict_config['ex_name'], table=self.predict_config['dataset'], features=sub_smt,
                        target=self.predict_config['target'])
@@ -482,7 +482,8 @@ class PredictionTab(Static):
 
 class PrePrecessingTab(Static):
     selected_columns = []
-    table = {'name': "demo", 'column_names': ['WRbwmaxMiB', 'WRbwminMiB'], "parent_table": "results"}
+    table = {'name': "new", 'column_names': ['WRbwmaxMiB', 'WRbwminMiB'], "parent_table": "results"}
+    df = pd.DataFrame()
 
     def __init__(self, conn) -> None:
         self.conn = conn
@@ -492,7 +493,7 @@ class PrePrecessingTab(Static):
         smt = ""
         if clean:
             where_clause = ' OR '.join([f'{column} IS NOT NULL' for column in self.table['column_names']])
-            smt = "CREATE TABLE {t_name} AS SELECT {t_columns} FROM {t_parent_table} WHERE {wc}".format(
+            smt = "CREATE TABLE '{t_name}' AS SELECT {t_columns} FROM {t_parent_table} WHERE {wc}".format(
                 t_name=self.table['name'],
                 t_columns=', '.join(
                     self.table['column_names']),
@@ -500,18 +501,26 @@ class PrePrecessingTab(Static):
                     'parent_table'],
                 wc=where_clause)
         else:
-            smt = "CREATE TABLE {t_name} AS SELECT {t_columns} FROM {t_parent_table}".format(t_name=self.table['name'],
+            smt = "CREATE TABLE '{t_name}' AS SELECT {t_columns} FROM {t_parent_table}".format(t_name=self.table['name'],
                                                                                              t_columns=', '.join(
                                                                                                  self.table[
                                                                                                      'column_names']),
                                                                                              t_parent_table=self.table[
                                                                                                  'parent_table'])
         self.conn.execute(smt)
-        result = self.conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (self.table['name'],)).fetchone()
+        new_smt= "SELECT name FROM sqlite_master WHERE type='table' AND name='{t_name}';".format(t_name= self.table['name'])
+        result = self.conn.execute(new_smt).fetchone()
         if result:
+            self.table['parent_table'] = self.table['name']
             print(f"Table {self.table['name']} was created successfully.")
             select = self.query_one("#table_sec", Select)
+            select.clear()
             select.set_options((line, line) for line in get_tables(self.conn))
+            app.tables = get_tables(self.conn)
+            table_sec_list = self.query_one('#table_sec_list', SelectionList)
+            table_sec_list.clear_options()
+            dv_pretty = self.query_one('#dv_pretty', Pretty)
+            dv_pretty.update("")
             return self.table['name']
         else:
             print(f"Failed to create table {self.table['name']}.")
@@ -522,6 +531,8 @@ class PrePrecessingTab(Static):
         yield ScrollableContainer(Input(id="new_tab_name", value=self.table['name'], placeholder="Enter a number...",
                                         validators=Length(minimum=4, maximum=100)), Select([], id="table_sec"),
                                   SelectionList(id="table_sec_list"), Switch(value=True, id="sw_clean"))
+        yield ScrollableContainer(Pretty(id="dv_pretty", object={}))
+
     def on_mount(self) -> None:
         input = self.query_one("#new_tab_name", Input)
         input.border_title = "Name for the new table:"
@@ -537,15 +548,19 @@ class PrePrecessingTab(Static):
     def input_changed(self, event: Input.Changed) -> None:
         self.table['name'] = event.value
 
-    @on(Select.Changed)
+    @on(Select.Changed, "#table_sec")
     def select_changed(self, event: Select.Changed) -> None:
-        s_string = event.value
-        self.table['parent_table'] = s_string
-        col_names = get_table_columns(self.conn, s_string)
-        sl = self.query_one("#table_sec_list", SelectionList)
-        sl.clear_options()
-        sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
-        self.update_selected_view()
+        if event.value and (event.value != Select.BLANK):
+            self.table['parent_table'] = event.value
+            col_names = get_table_columns(self.conn, self.table['parent_table'])
+            sl = self.query_one("#table_sec_list", SelectionList)
+            sl.clear_options()
+            sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
+            print("pt_:",  self.table['parent_table'] )
+            smt = "SELECT * from '{table}'".format(table=self.table['parent_table'])
+            self.df = pd.read_sql_query(smt, self.conn)
+            dv_pretty = self.query_one("#dv_pretty", Pretty)
+            dv_pretty.update(self.df.describe())
 
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
@@ -553,8 +568,11 @@ class PrePrecessingTab(Static):
         self.selected_columns = [str(select_list.get_option_at_index(selected_item).prompt) for selected_item in
                                  select_list.selected]
         self.table['column_names'] = self.selected_columns
+        dv_pretty = self.query_one("#dv_pretty", Pretty)
+        print("selected : ", self.selected_columns)
+        dv_pretty.update(self.df[self.selected_columns].describe())
 
-
+"""
 class DataViewTab(Static):
     def __init__(self, conn) -> None:
         self.conn = conn
@@ -584,16 +602,10 @@ class DataViewTab(Static):
         sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
         # self.update_selected_view()
 
-        self.df = pd.read_sql_query("SELECT * from {table}".format(table=self.table), self.conn)
+        self.df = pd.read_sql_query("SELECT * from '{table}'".format(table=self.table), self.conn)
         dv_pretty = self.query_one("#dv_pretty", Pretty)
         dv_pretty.update(self.df.describe())
-        """
-        col_names = get_table_columns(self.conn, s_string)
-        sl = self.query_one("#table_sec_list", SelectionList)
-        sl.clear_options()
-        sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
-        """
-
+        
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
         select_list = self.query_one("#dv_table_sec_list", SelectionList)
@@ -602,7 +614,7 @@ class DataViewTab(Static):
         dv_pretty = self.query_one("#dv_pretty", Pretty)
         print("selected : ", self.selected_columns)
         dv_pretty.update(self.df[self.selected_columns].describe())
-
+"""
 
 if __name__ == "__main__":
     conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")

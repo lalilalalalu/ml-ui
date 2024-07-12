@@ -80,8 +80,19 @@ LIMIT 1;""".format(f_str=f_str)
     WHERE match = False;
         """
 
-    print(new_smt)
-    results = conn.execute(test_3).fetchall()
+
+    smtml = """SELECT sqml_train(
+                                      'Demo2571',
+                                      'regression',
+                                      'linear_regression',
+                                      'BABA6afa23cc-a30e-4193-84e9-3db8c5b259d4',
+                                      'WRbwmaxMiB'
+                                  )
+                                  AS
+                                  training;"""
+
+    print(smtml)
+    results = conn.execute(smtml).fetchall()
     for idx, row in enumerate(results):
         print(tuple(row))
         print("---------%i-----------" %idx)

@@ -5,7 +5,7 @@ from __future__ import (print_function,
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
 from textual.widgets import Footer, Input, Select, SelectionList, RadioButton, RadioSet, Static, \
-    Pretty, TabbedContent, DataTable, Switch
+    Pretty, TabbedContent, DataTable, Switch, LoadingIndicator
 from textual.validation import Function, Length, ValidationResult, Validator
 from textual.binding import Binding
 from textual import events
@@ -41,9 +41,21 @@ def get_table_columns(conn, table="results"):
     return [c_name for c_name in columns]
 
 
+def get_avail_experiments(conn):
+    s_smt = """
+        SELECT experiment_id, name, created_at, updated_at, algorithm, dataset, target
+        FROM (
+            SELECT *
+            FROM sqml_experiments se
+            INNER JOIN sqml_runs sr
+            ON se.id = sr.experiment_id
+            WHERE se.updated_at = sr.updated_at
+        );
+        """
+    return conn.execute(s_smt).fetchall()
+
+
 class TabsApp(App[None]):
-    table_name = "results"
-    tables = []
     def __init__(self, conn) -> None:
         self.conn = conn
         super().__init__()
@@ -180,14 +192,21 @@ class TabsApp(App[None]):
         pt = self.query_one(PrePrecessingTab)
         pt.create_new_table()
 
+    def action_analysis(self):
+        pt = self.query_one(AnalysisTab)
+        pt.apply_lamda()
+
+    def action_apply_pandas_func(self):
+        pt = self.query_one(AnalysisTab)
+        pt.apply_pandas_func()
+
     def compose(self) -> ComposeResult:
         # yield Header()
-        c_names = get_table_columns(self.conn, self.table_name)
-        with TabbedContent("Training", "Prediction", "Preprocessing"):
+        with TabbedContent("Training", "Prediction", "Preprocessing", "Analysis"):
             yield TrainingTab(self.conn)
-            yield PredictionTab(self.conn, c_names)
+            yield PredictionTab(self.conn)
             yield PrePrecessingTab(self.conn)
-            # yield DataViewTab(self.conn)
+            yield AnalysisTab(self.conn)
         yield Footer()
 
     def on_mount(self) -> None:
@@ -204,15 +223,31 @@ class TabsApp(App[None]):
                           show=False)
                 self.bind(keys="ctrl+o", action="pre_processing", description="Do Preprocessing", key_display="ctr + o",
                           show=False)
+                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
+                          show=False)
                 self.refresh_bindings()
+                ex_sec = self.query_one("#ex_sec", Select)
+                ex_sec.clear()
+                ex_sec.set_options((line, line) for line in format_data(get_avail_experiments(self.conn)))
+                ex_sec_list = self.query_one("#ex_sec_list", SelectionList)
+                ex_sec_list.clear_options()
             elif event.pane.id == "tab-1":
                 self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
                           show=False)
                 self.bind(keys="ctrl+t", action="training", description="Do training", key_display="ctr + t", show=True)
                 self.bind(keys="ctrl+o", action="pre_processing", description="Do Preprocessing", key_display="ctr + o",
                           show=False)
+                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
+                          show=False)
                 self.refresh_bindings()
-                self.query_one(TrainingTab).Unmount()
+                t_task_name = self.query_one("#t_task_name", Input)
+                t_task_name.value=""
+                t_sel_table = self.query_one("#t_sel_table", Select)
+                t_sel_table.clear()
+                t_sel_table.set_options((line, line) for line in get_tables(self.conn))
+                t_sel_list_target = self.query_one("#t_sel_list_target", SelectionList)
+                t_sel_list_target.clear_options()
+
             elif event.pane.id == "tab-3":
                 self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
                           show=False)
@@ -220,19 +255,36 @@ class TabsApp(App[None]):
                           show=False)
                 self.bind(keys="ctrl+o", action="pre_processing", description="Create new table", key_display="ctr + o",
                           show=True)
+                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
+                          show=False)
                 self.refresh_bindings()
+
+            elif event.pane.id == "tab-4":
+                self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
+                          show=False)
+                self.bind(keys="ctrl+t", action="training", description="Do training", key_display="ctr + t",
+                          show=False)
+                self.bind(keys="ctrl+o", action="pre_processing", description="Create new table", key_display="ctr + o",
+                          show=False)
+                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
+                          show=True)
+                self.bind(keys="ctrl+h", action="apply_pandas_func", description="apply pandas function", key_display="ctr + h",
+                          show=True)
+                self.refresh_bindings()
+
 
 class TrainingTab(Static):
     def __init__(self, conn) -> None:
         self.conn = conn
         super().__init__()
 
+    test = "jo"
     LR = ['linear_regression', 'sgd', 'ridge', 'ridge_cv', 'elastic_net', 'elastic_net_cv', 'lasso', 'lasso_cv',
           'decision_tree', 'ada_boost', 'bagging', 'random_forest', 'gradient_boosting', 'knn', 'mlp', 'svr']
 
     RG = ['logistic_regression', 'sgd', 'ridge', 'ridge_cv', 'decision_tree', 'ada_boost', 'bagging',
           'decision_tree', 'ada_boost', 'bagging', 'gradient_boosting', 'random_forest', 'knn', 'mlp', 'svc']
-    ml_config = {'name': "Demo", 'type': Type.regression, 'algo': "linear_regression", 'table': "results", 'target': []}
+    ml_config = {'name': "", 'type': Type.regression, 'algo': "linear_regression", 'table': "results", 'target': []}
 
     def generate_ml_sql(self):
         from sqlite_ml.sqml import SQML
@@ -240,7 +292,7 @@ class TrainingTab(Static):
         sqml = SQML()
         sqml.setup_schema(self.conn)
         sqml.register_functions(self.conn)
-        slist = self.query_one("#test2", SelectionList)
+        slist = self.query_one("#t_sel_list_target", SelectionList)
         if len(self.ml_config['target']) < 1:
             slist.styles.border_title_color = "red"
         else:
@@ -274,12 +326,12 @@ class TrainingTab(Static):
             pretty_result.border_title = "Training Output:"
 
     def compose(self) -> ComposeResult:
-        yield ScrollableContainer(Select(id="t_sel_table", options=[]),SelectionList[int](id="test2"),
+        yield ScrollableContainer(Select(id="t_sel_table", options=[]),SelectionList[int](id="t_sel_list_target"),
                                   RadioSet(RadioButton("Regression", value=self.ml_config['type'].value),
                                            RadioButton("Classification", value=not self.ml_config['type'].value))
                                   )
 
-        yield ScrollableContainer(Input(id="t_task_name", placeholder="ML Workflow name", type="text", value=self.ml_config['name']), Select(id="t_sel_algo", options=[]))
+        yield ScrollableContainer(Input(id="t_task_name", placeholder="Give a name for the ML task...", type="text", value=self.ml_config['name']), Select(id="t_sel_algo", options=[]))
 
     def on_mount(self) -> None:
         self.query_one("#t_task_name", Input).border_title = "ML Task name:"
@@ -291,7 +343,7 @@ class TrainingTab(Static):
         t_sel_table = self.query_one("#t_sel_table", Select)
         t_sel_table.set_options((line, line) for line in get_tables(self.conn))
         t_sel_table.border_title = "Select data source"
-        self.query_one("#test2", SelectionList).border_title = "target selection"
+        self.query_one("#t_sel_list_target", SelectionList).border_title = "target selection"
 
     @on(Input.Changed)
     def show_invalid_reasons(self, event: Input.Changed) -> None:
@@ -300,15 +352,16 @@ class TrainingTab(Static):
     @on(Select.Changed, "#t_sel_algo")
     def select_changed(self, event: Select.Changed) -> None:
         self.ml_config['algo'] = event.value
-        select_t = self.query_one("#test2", SelectionList)
+        print("sel_algo: ", self.ml_config['algo'])
+        select_t = self.query_one("#t_sel_list_target", SelectionList)
         select_t.disabled = False
 
     @on(Select.Changed, "#t_sel_table")
     def select_changed(self, event: Select.Changed) -> None:
         self.ml_config['table'] = event.value
         tabs = get_table_columns(self.conn, self.ml_config['table'])
-        self.query_one("#test2", SelectionList).clear_options()
-        self.query_one("#test2", SelectionList).add_options([(name[0], idx, False) for idx, name in enumerate(tabs)])
+        self.query_one("#t_sel_list_target", SelectionList).clear_options()
+        self.query_one("#t_sel_list_target", SelectionList).add_options([(name[0], idx, False) for idx, name in enumerate(tabs)])
 
     @on(RadioSet.Changed)
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
@@ -321,10 +374,11 @@ class TrainingTab(Static):
             select.set_options((line, line) for line in self.LR)
         else:
             select.set_options((line, line) for line in self.RG)
+        print("sel_type: ", self.ml_config['type'])
 
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
-        select_list = self.query_one("#test2", SelectionList)
+        select_list = self.query_one("#t_sel_list_target", SelectionList)
         self.ml_config['target'] = [str(select_list.get_option_at_index(selected_item).prompt) for selected_item in select_list.selected]
 
 
@@ -356,25 +410,12 @@ def parse_experiment_to_dic(s):
 
 
 class PredictionTab(Static):
-    def __init__(self, conn, c_name) -> None:
+    def __init__(self, conn) -> None:
         self.conn = conn
         super().__init__()
 
     predict_config = {}
     rows = []
-
-    def get_avail_experiments(self):
-        s_smt = """
-            SELECT experiment_id, name, created_at, updated_at, algorithm, dataset, target
-            FROM (
-                SELECT *
-                FROM sqml_experiments se
-                INNER JOIN sqml_runs sr
-                ON se.id = sr.experiment_id
-                WHERE se.updated_at = sr.updated_at
-            );
-            """
-        return self.conn.execute(s_smt).fetchall()
 
     def generate_predict_sql(self):
         from sqlite_ml.sqml import SQML
@@ -410,8 +451,7 @@ class PredictionTab(Static):
               FROM
                 '{table}'
             )
-          ) batch ON (batch.rowid + 1) = '{table}'.rowid
-        WHERE match = True;
+          ) batch ON (batch.rowid + 1) = '{table}'.rowid;
             """.format(name=self.predict_config['ex_name'], table=self.predict_config['dataset'], features=sub_smt,
                        target=self.predict_config['target'])
         results = self.conn.execute(smt_batched).fetchall()
@@ -440,9 +480,9 @@ class PredictionTab(Static):
     def on_mount(self) -> None:
         select = self.query_one("#ex_sec", Select)
         select.border_title = "Model selection"
-        avail_ex = self.get_avail_experiments()
+        #avail_ex = get_avail_experiments(self.conn)
         select.border_title = "Model selection"
-        select.set_options((line, line) for line in format_data(avail_ex))
+        # select.set_options((line, line) for line in format_data(avail_ex))
         sec_list = self.query_one('#ex_sec_list', SelectionList)
         sec_list.border_title = "Selected features "
         sec_list.add_options([])
@@ -450,29 +490,30 @@ class PredictionTab(Static):
 
     @on(Select.Changed)
     def select_changed(self, event: Select.Changed) -> None:
-        try:
-            self.query_one(DataTable)
-        except NoMatches:
-            pass
-        else:
-            self.query_one(DataTable).remove()
-        s_string = event.value
-        select_ex = parse_experiment_to_dic(s_string)
-        self.predict_config = select_ex
-        f_list = [(name[0], idx, True) for idx, name in enumerate(get_table_columns(self.conn, self.predict_config['dataset']))]
-        self.predict_config['features'] = [f for f in f_list if str(f[0]) != select_ex['target']]
-        sec_list = self.query_one('#ex_sec_list', SelectionList)
-        sec_list.clear_options()
-        sec_list.add_options(self.predict_config['features'])
-        sec_list.disabled = True
-        self.rows = []
-        try:
-            table = self.query_one(DataTable)
-            table.remove()
-        except NoMatches:
-            pass
+        if event.value != Select.BLANK:
+            try:
+                self.query_one(DataTable)
+            except NoMatches:
+                pass
+            else:
+                self.query_one(DataTable).remove()
+            s_string = event.value
+            select_ex = parse_experiment_to_dic(s_string)
+            self.predict_config = select_ex
+            f_list = [(name[0], idx, True) for idx, name in enumerate(get_table_columns(self.conn, self.predict_config['dataset']))]
+            self.predict_config['features'] = [f for f in f_list if str(f[0]) != select_ex['target']]
+            sec_list = self.query_one('#ex_sec_list', SelectionList)
+            sec_list.clear_options()
+            sec_list.add_options(self.predict_config['features'])
+            sec_list.disabled = True
+            self.rows = []
+            try:
+                table = self.query_one(DataTable)
+                table.remove()
+            except NoMatches:
+                pass
 
-        sec_list.disabled = False
+            sec_list.disabled = False
 
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
@@ -482,7 +523,7 @@ class PredictionTab(Static):
 
 class PrePrecessingTab(Static):
     selected_columns = []
-    table = {'name': "new", 'column_names': ['WRbwmaxMiB', 'WRbwminMiB'], "parent_table": "results"}
+    table = {'name': "", 'column_names': ['WRbwmaxMiB', 'WRbwminMiB'], "parent_table": "results"}
     df = pd.DataFrame()
 
     def __init__(self, conn) -> None:
@@ -492,7 +533,7 @@ class PrePrecessingTab(Static):
     def create_new_table(self, clean=True):
         smt = ""
         if clean:
-            where_clause = ' OR '.join([f'{column} IS NOT NULL' for column in self.table['column_names']])
+            where_clause = ' AND '.join([f'{column} IS NOT NULL' for column in self.table['column_names']])
             smt = "CREATE TABLE '{t_name}' AS SELECT {t_columns} FROM {t_parent_table} WHERE {wc}".format(
                 t_name=self.table['name'],
                 t_columns=', '.join(
@@ -507,6 +548,7 @@ class PrePrecessingTab(Static):
                                                                                                      'column_names']),
                                                                                              t_parent_table=self.table[
                                                                                                  'parent_table'])
+        print("clean:", smt)
         self.conn.execute(smt)
         new_smt= "SELECT name FROM sqlite_master WHERE type='table' AND name='{t_name}';".format(t_name= self.table['name'])
         result = self.conn.execute(new_smt).fetchone()
@@ -516,7 +558,6 @@ class PrePrecessingTab(Static):
             select = self.query_one("#table_sec", Select)
             select.clear()
             select.set_options((line, line) for line in get_tables(self.conn))
-            app.tables = get_tables(self.conn)
             table_sec_list = self.query_one('#table_sec_list', SelectionList)
             table_sec_list.clear_options()
             dv_pretty = self.query_one('#dv_pretty', Pretty)
@@ -528,10 +569,10 @@ class PrePrecessingTab(Static):
             return None
 
     def compose(self) -> ComposeResult:
-        yield ScrollableContainer(Input(id="new_tab_name", value=self.table['name'], placeholder="Enter a number...",
+        yield ScrollableContainer(Input(id="new_tab_name", value=self.table['name'], placeholder="Give a name...",
                                         validators=Length(minimum=4, maximum=100)), Select([], id="table_sec"),
                                   SelectionList(id="table_sec_list"), Switch(value=True, id="sw_clean"))
-        yield ScrollableContainer(Pretty(id="dv_pretty", object={}))
+        yield ScrollableContainer(Pretty(id="dv_pretty", object=None))
 
     def on_mount(self) -> None:
         input = self.query_one("#new_tab_name", Input)
@@ -543,6 +584,9 @@ class PrePrecessingTab(Static):
         table_sec_list.border_title = "Selected columns:"
         sw_clean = self.query_one("#sw_clean", Switch)
         sw_clean.border_title = "Do cleaning"
+        dv_pretty = self.query_one("#dv_pretty", Pretty)
+        dv_pretty.border_title = "Data overview:"
+
 
     @on(Input.Changed)
     def input_changed(self, event: Input.Changed) -> None:
@@ -568,55 +612,92 @@ class PrePrecessingTab(Static):
         self.selected_columns = [str(select_list.get_option_at_index(selected_item).prompt) for selected_item in
                                  select_list.selected]
         self.table['column_names'] = self.selected_columns
+        clean_sw = self.query_one(Switch)
+        if clean_sw.value:
+            self.df = self.df.dropna(subset=self.selected_columns)
         dv_pretty = self.query_one("#dv_pretty", Pretty)
         print("selected : ", self.selected_columns)
         dv_pretty.update(self.df[self.selected_columns].describe())
 
-"""
-class DataViewTab(Static):
+
+class AnalysisTab(Static):
+    selected_columns = []
+    table = {'name': "", 'column_names': ['WRbwmaxMiB', 'WRbwminMiB'], "parent_table": "results", "lambda": "lambda x: x < 200"}
+    df = pd.DataFrame()
+
     def __init__(self, conn) -> None:
         self.conn = conn
         super().__init__()
 
-    table = ""
-    selected_columns = []
-    df = pd.DataFrame()
+    def apply_lamda_to_data(self):
+        input = self.query_one("#a_lamda", Input)
+        print("a_lamda: ", input.value)
+        lambda_func = eval(input.value)
+        self.df[self.selected_columns] = self.df[self.selected_columns].apply(lambda_func)
+        dv_pretty = self.query_one("#a_dv_pretty", Pretty)
+        dv_pretty.update(self.df[self.selected_columns])
+
+    def apply_lamda(self):
+        input = self.query_one("#a_lamda", Input)
+        print("a_lamda: ", input.value)
+        lambda_func = eval(input.value)
+        filtered_condition = self.df[self.selected_columns].apply(lambda_func)
+        dv_pretty = self.query_one("#a_dv_pretty", Pretty)
+        dv_pretty.update(self.df[filtered_condition])
+
+    def apply_pandas_func(self):
+        # input = self.query_one("#a_lamda", Input)
+        exec_code = f"self.df[self.selected_columns]." + self.table['lambda']
+        print("apply_pandas_func: ", exec_code)
+        result = eval(exec_code)
+        dv_pretty = self.query_one("#a_dv_pretty", Pretty)
+        dv_pretty.update(self.df[result])
 
     def compose(self) -> ComposeResult:
-        yield ScrollableContainer(Select([], id="dv_table_sec"), SelectionList(id="dv_table_sec_list"))
-        yield ScrollableContainer(Pretty(id="dv_pretty", object={}))
+        yield ScrollableContainer(Input(id="a_lamda", value=self.table['lambda'], placeholder="apply lamda function..."), Select([], id="a_table_sec"))
+        yield ScrollableContainer(SelectionList(id="a_table_sec_list"), Pretty(id="a_dv_pretty", object=None))
 
     def on_mount(self) -> None:
-        select = self.query_one("#dv_table_sec", Select)
+        select = self.query_one("#a_table_sec", Select)
         select.border_title = "Origin table:"
         select.set_options((line, line) for line in get_tables(self.conn))
-        table_sec_list = self.query_one('#dv_table_sec_list', SelectionList)
+        table_sec_list = self.query_one('#a_table_sec_list', SelectionList)
         table_sec_list.border_title = "Selected columns:"
+        dv_pretty = self.query_one("#a_dv_pretty", Pretty)
+        dv_pretty.border_title = "Data overview:"
+        dv_pretty.styles.height = "100%"
+        dv_pretty.styles.overflow_y="scroll"
 
-    @on(Select.Changed)
+    @on(Input.Changed, "#a_lamda")
+    def input_changed(self, event: Input.Changed) -> None:
+        self.table['lambda'] = event.value
+
+    @on(Select.Changed, "#a_table_sec")
     def select_changed(self, event: Select.Changed) -> None:
-        self.table = event.value
-        col_names = get_table_columns(self.conn, self.table)
-        sl = self.query_one("#dv_table_sec_list", SelectionList)
-        sl.clear_options()
-        sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
-        # self.update_selected_view()
+        if event.value and (event.value != Select.BLANK):
+            self.table['parent_table'] = event.value
+            col_names = get_table_columns(self.conn, self.table['parent_table'])
+            sl = self.query_one("#a_table_sec_list", SelectionList)
+            sl.clear_options()
+            sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
+            print("pt_:",  self.table['parent_table'] )
+            smt = "SELECT * from '{table}'".format(table=self.table['parent_table'])
+            self.df = pd.read_sql_query(smt, self.conn)
+            dv_pretty = self.query_one("#a_dv_pretty", Pretty)
+            dv_pretty.update(self.df.describe())
 
-        self.df = pd.read_sql_query("SELECT * from '{table}'".format(table=self.table), self.conn)
-        dv_pretty = self.query_one("#dv_pretty", Pretty)
-        dv_pretty.update(self.df.describe())
-        
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
-        select_list = self.query_one("#dv_table_sec_list", SelectionList)
+        select_list = self.query_one("#a_table_sec_list", SelectionList)
         self.selected_columns = [str(select_list.get_option_at_index(selected_item).prompt) for selected_item in
                                  select_list.selected]
-        dv_pretty = self.query_one("#dv_pretty", Pretty)
+        self.table['column_names'] = self.selected_columns
+        dv_pretty = self.query_one("#a_dv_pretty", Pretty)
         print("selected : ", self.selected_columns)
         dv_pretty.update(self.df[self.selected_columns].describe())
-"""
+
 
 if __name__ == "__main__":
-    conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
+    conn = sqlite3.connect("/Users/flash/Desktop/todaydatabase.dat")
     app = TabsApp(conn)
     app.run()

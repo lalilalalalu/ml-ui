@@ -5,8 +5,8 @@ from __future__ import (print_function,
 from textual.app import App, ComposeResult
 from textual.css.query import NoMatches
 from textual.widgets import Footer, Input, Select, SelectionList, RadioButton, RadioSet, Static, \
-    Pretty, TabbedContent, DataTable, Switch, LoadingIndicator
-from textual.validation import Function, Length, ValidationResult, Validator
+    Pretty, TabbedContent, DataTable, Switch
+from textual.validation import Length
 from textual.binding import Binding
 from textual import events
 from textual.containers import ScrollableContainer
@@ -14,6 +14,7 @@ from textual import on
 import sqlite3
 from enum import Enum
 import re
+from PIL import Image
 
 from sklearn.metrics import mean_squared_error, mean_absolute_error
 from sklearn.model_selection import train_test_split
@@ -42,17 +43,21 @@ def get_table_columns(conn, table="results"):
 
 
 def get_avail_experiments(conn):
-    s_smt = """
-        SELECT experiment_id, name, created_at, updated_at, algorithm, dataset, target
-        FROM (
-            SELECT *
-            FROM sqml_experiments se
-            INNER JOIN sqml_runs sr
-            ON se.id = sr.experiment_id
-            WHERE se.updated_at = sr.updated_at
-        );
-        """
-    return conn.execute(s_smt).fetchall()
+    try:
+        s_smt = """
+            SELECT experiment_id, name, created_at, updated_at, algorithm, dataset, target
+            FROM (
+                SELECT *
+                FROM sqml_experiments se
+                INNER JOIN sqml_runs sr
+                ON se.id = sr.experiment_id
+                WHERE se.updated_at = sr.updated_at
+            );
+            """
+        return conn.execute(s_smt).fetchall()
+    except Exception as e:
+        print(e)
+
 
 
 class TabsApp(App[None]):
@@ -75,6 +80,11 @@ class TabsApp(App[None]):
              Tabs {
                  dock: top;
              }
+             
+                ImageViewer{
+        min-width: 8;
+        min-height: 8;
+    }
 
              ScrollableContainer {
                  layout: grid;
@@ -228,9 +238,10 @@ class TabsApp(App[None]):
                 self.refresh_bindings()
                 ex_sec = self.query_one("#ex_sec", Select)
                 ex_sec.clear()
-                ex_sec.set_options((line, line) for line in format_data(get_avail_experiments(self.conn)))
-                ex_sec_list = self.query_one("#ex_sec_list", SelectionList)
-                ex_sec_list.clear_options()
+                if get_avail_experiments(self.conn):
+                    ex_sec.set_options((line, line) for line in format_data(get_avail_experiments(self.conn)))
+                    ex_sec_list = self.query_one("#ex_sec_list", SelectionList)
+                    ex_sec_list.clear_options()
             elif event.pane.id == "tab-1":
                 self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
                           show=False)
@@ -435,8 +446,7 @@ class PredictionTab(Static):
         smt_batched = """
         SELECT
           '{table}'.*,
-          batch.value AS prediction,
-          '{table}'.{target} = batch.value AS match
+          batch.value AS prediction
         FROM
           '{table}'
           JOIN json_each (
@@ -454,9 +464,10 @@ class PredictionTab(Static):
           ) batch ON (batch.rowid + 1) = '{table}'.rowid;
             """.format(name=self.predict_config['ex_name'], table=self.predict_config['dataset'], features=sub_smt,
                        target=self.predict_config['target'])
+        print("sql: ", smt_batched)
         results = self.conn.execute(smt_batched).fetchall()
         get_table_columns(self.conn, self.predict_config['dataset'])
-        header = [name[0] for name in get_table_columns(self.conn, self.predict_config['dataset'])] + ["prediction", "match"]
+        header = [name[0] for name in get_table_columns(self.conn, self.predict_config['dataset'])] + ["prediction"]
         self.rows.append(tuple(header))
         for idx, row in enumerate(results):
             self.rows.append(tuple(row))
@@ -474,15 +485,36 @@ class PredictionTab(Static):
         table.add_rows(self.rows[1:])
         table.border_title = "Prediction Results:"
 
+        df = pd.DataFrame(self.rows[1:], columns=self.rows[0])
+        sns.pairplot(df)
+        plt.show()
+
+        plt.figure(figsize=(10, 8))
+        corr_matrix = df.corr()
+        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+        plt.title('Correlation Matrix')
+        plt.show()
+    """
+        fig = plt.figure(figsize=(10, 8))
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Scatter plot
+        ax.scatter(df['feature1'], df['feature2'], df['target'], c='r', marker='o')
+
+        # Labels
+        ax.set_xlabel('Feature 1')
+        ax.set_ylabel('Feature 2')
+        ax.set_zlabel('Target')
+
+        plt.title('3D Scatter Plot')
+        plt.show()
+    """
     def compose(self) -> ComposeResult:
         yield ScrollableContainer(Select([], id="ex_sec"), SelectionList(id="ex_sec_list"))
 
     def on_mount(self) -> None:
         select = self.query_one("#ex_sec", Select)
         select.border_title = "Model selection"
-        #avail_ex = get_avail_experiments(self.conn)
-        select.border_title = "Model selection"
-        # select.set_options((line, line) for line in format_data(avail_ex))
         sec_list = self.query_one('#ex_sec_list', SelectionList)
         sec_list.border_title = "Selected features "
         sec_list.add_options([])
@@ -666,7 +698,7 @@ class AnalysisTab(Static):
         dv_pretty = self.query_one("#a_dv_pretty", Pretty)
         dv_pretty.border_title = "Data overview:"
         dv_pretty.styles.height = "100%"
-        dv_pretty.styles.overflow_y="scroll"
+        dv_pretty.styles.overflow_y ="scroll"
 
     @on(Input.Changed, "#a_lamda")
     def input_changed(self, event: Input.Changed) -> None:
@@ -698,6 +730,6 @@ class AnalysisTab(Static):
 
 
 if __name__ == "__main__":
-    conn = sqlite3.connect("/Users/flash/Desktop/todaydatabase.dat")
+    conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
     app = TabsApp(conn)
     app.run()

@@ -86,11 +86,11 @@ def plot_multiple_dataframes(dfs, predict_configs, main_title):
 
         # Labels for axes
         # only for the case study
-        x_label = "mean bandwidth [MiB/s]"
+        x_label = "Mean Bandwidth [MiB/s]"
         if "min" in y_label:
-            y_label= "min bandwidth [MiB/s]"
+            y_label= "Min Bandwidth [MiB/s]"
         elif "max" in y_label:
-            y_label= "max bandwidth [MiB/s]"
+            y_label= "Max Bandwidth [MiB/s]"
 
         ax.set_xlabel(x_label, fontsize=20)
         ax.set_ylabel(y_label, fontsize=20)
@@ -105,15 +105,15 @@ def plot_multiple_dataframes(dfs, predict_configs, main_title):
         ax.grid(True, linestyle='--', alpha=0.6)
 
     # Add a single color bar for the entire figure
-    #cbar = fig.colorbar(scatter, ax=axs, orientation='vertical', fraction=0.02, pad=0.04)
-    #cbar.set_label("Normalized Bandwidth", fontsize=20)
-    #cbar.ax.tick_params(labelsize=20)
+    cbar = fig.colorbar(scatter, ax=axs, orientation='vertical', fraction=0.02, pad=0.04)
+    # cbar.set_label("Normalized Bandwidth", fontsize=20)
+    cbar.ax.tick_params(labelsize=20)
 
     # Add main title for the entire figure
     fig.suptitle(main_title, fontsize=20, y=1.05)  # Adjust y to ensure title is visible
 
     # Adjust layout manually
-    fig.subplots_adjust(left=0.05, right=0.85, top=0.90, bottom=0.10, wspace=0.1)  # Adjust top margin for title
+    # fig.subplots_adjust(left=0.05, right=0.85, top=0.90, bottom=0.10, wspace=0.1)  # Adjust top margin for title
 
     plt.show()
 
@@ -228,7 +228,7 @@ def generate_predict_sql(conn, predict_config):
 
 
 if __name__ == '__main__':
-    conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
+    conn = sqlite3.connect("DBs/scale_3056_database.dat")
 
 
     config0 = {"dataset":"cleanedRdWdBw", "features":["WRbwmaxMiB", ], "ex_name": "wrbwmax", "target":"RDbwmaxMiB"}

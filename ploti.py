@@ -228,8 +228,8 @@ def generate_predict_sql(conn, predict_config):
 
 
 if __name__ == '__main__':
-    conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
-
+    # conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
+    conn = sqlite3.connect("/Users/flash/Desktop/DBs/corona-striping.dat")
 
     config0 = {"dataset":"cleanedRdWdBw", "features":["WRbwmaxMiB", ], "ex_name": "wrbwmax", "target":"RDbwmaxMiB"}
     # generate_predict_sql(conn, config1)
@@ -255,6 +255,10 @@ if __name__ == '__main__':
     config8 = {"dataset": "IopsBWWriteMean", "features": ["WRiopsmeanOPS", ], "ex_name": "IopsBWWriteMean",
                "target": "WRbwmeanMiB"}
 
+    # config9 =
+
+'''
+
     configs = [config1, config2]
     dfs =[]
     for config in configs:
@@ -267,17 +271,8 @@ if __name__ == '__main__':
         dfs.append(get_df(conn,config))
     plot_multiple_dataframes(dfs,configs, "Write")
 
-    configs = [config5, config6]
-    dfs = []
-    for config in configs:
-        dfs.append(get_df(conn, config))
-    plot_multiple_dataframes(dfs, configs, "test")
+'''
 
 
-    configs = [config7, config8]
-    dfs = []
-    for config in configs:
-        dfs.append(get_df(conn, config))
-    plot_multiple_dataframes(dfs, configs, "test")
 
 

@@ -359,11 +359,14 @@ class TrainingTab(Static):
     @on(Input.Changed)
     def show_invalid_reasons(self, event: Input.Changed) -> None:
         self.ml_config['name'] = event.value
+        print("hi")
+        select = self.query_one("#t_sel_algo", Select)
+        print(select.value)
+        print(self.ml_config['algo'] )
 
     @on(Select.Changed, "#t_sel_algo")
-    def select_changed(self, event: Select.Changed) -> None:
+    def select_changed_algo(self, event: Select.Changed) -> None:
         self.ml_config['algo'] = event.value
-        print("sel_algo: ", self.ml_config['algo'])
         select_t = self.query_one("#t_sel_list_target", SelectionList)
         select_t.disabled = False
 
@@ -385,7 +388,6 @@ class TrainingTab(Static):
             select.set_options((line, line) for line in self.LR)
         else:
             select.set_options((line, line) for line in self.RG)
-        print("sel_type: ", self.ml_config['type'])
 
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
@@ -730,6 +732,7 @@ class AnalysisTab(Static):
 
 
 if __name__ == "__main__":
-    conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
+    #conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
+    conn = sqlite3.connect("/Users/flash/Desktop/DBs/corona-striping.dat")
     app = TabsApp(conn)
     app.run()

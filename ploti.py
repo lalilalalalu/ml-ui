@@ -255,7 +255,16 @@ if __name__ == '__main__':
     config8 = {"dataset": "IopsBWWriteMean", "features": ["WRiopsmeanOPS", ], "ex_name": "IopsBWWriteMean",
                "target": "WRbwmeanMiB"}
 
-    # config9 =
+    config9 = {"dataset": "WrBwMaxStriping", "features": ["lustreStripeCount", ], "ex_name": "test",
+               "target": "WRbwmaxMiB"}
+    config10 = {"dataset": "WrBwMaxStriping", "features": ["j_task", ], "ex_name": "test2",
+               "target": "WRbwmaxMiB"}
+
+    configs = [config9, config10]
+    dfs = []
+    for config in configs:
+        dfs.append(get_df(conn, config))
+    plot_multiple_dataframes(dfs, configs, "Write")
 
 '''
 
@@ -272,6 +281,7 @@ if __name__ == '__main__':
     plot_multiple_dataframes(dfs,configs, "Write")
 
 '''
+
 
 
 

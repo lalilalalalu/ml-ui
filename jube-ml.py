@@ -488,14 +488,14 @@ class PredictionTab(Static):
         table.border_title = "Prediction Results:"
 
         df = pd.DataFrame(self.rows[1:], columns=self.rows[0])
-        sns.pairplot(df)
-        plt.show()
+        # sns.pairplot(df)
+        # plt.show()
 
-        plt.figure(figsize=(10, 8))
-        corr_matrix = df.corr()
-        sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
-        plt.title('Correlation Matrix')
-        plt.show()
+        # plt.figure(figsize=(10, 8))
+        # corr_matrix = df.corr()
+        # sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
+        # plt.title('Correlation Matrix')
+        # plt.show()
     """
         fig = plt.figure(figsize=(10, 8))
         ax = fig.add_subplot(111, projection='3d')
@@ -733,6 +733,6 @@ class AnalysisTab(Static):
 
 if __name__ == "__main__":
     #conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
-    conn = sqlite3.connect("/Users/flash/Desktop/DBs/corona-striping.dat")
+    conn = sqlite3.connect("/Users/flash/Desktop/DBs/himeno_result_database_x_750.dat")
     app = TabsApp(conn)
     app.run()

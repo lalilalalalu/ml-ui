@@ -732,7 +732,7 @@ class AnalysisTab(Static):
 
 
 if __name__ == "__main__":
-    #conn = sqlite3.connect("/Users/flash/Desktop/DBs/scale_3056_database.dat")
-    conn = sqlite3.connect("/Users/flash/Desktop/DBs/himeno_result_database_x_750.dat")
+    #conn = sqlite3.connect("DBs/scale_3056_database.dat")
+    conn = sqlite3.connect("DBs/himeno_result_database_x_750.dat")
     app = TabsApp(conn)
     app.run()

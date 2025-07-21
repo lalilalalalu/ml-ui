@@ -14,16 +14,7 @@ from textual import on
 import sqlite3
 from enum import Enum
 import re
-from PIL import Image
-
-from sklearn.metrics import mean_squared_error, mean_absolute_error
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression, LogisticRegression
-from sklearn.metrics import classification_report
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-
 
 class Type(Enum):
     classification = False

@@ -63,7 +63,12 @@ class TabsApp(App[None]):
             action="help",
             description="Show help",
             key_display="?",
-        )
+        ),
+        Binding(key="p", action="predict", description="Prediction", key_display="p"),
+        Binding(key="t", action="training", description="Training", key_display="t"),
+
+        Binding(key="o", action="pre_processing", description="Preprocessing", key_display="o"),
+        Binding(key="a", action="analysis", description="Apply lambdas", key_display="a"),
 
     ]
 
@@ -174,10 +179,10 @@ class TabsApp(App[None]):
              """
 
     def on_key(self, event: events.Key) -> None:
-        if event.key == "ctrl+p":
+        if event.key == "p":
             pt = self.query_one(PredictionTab)
             pt.generate_predict_sql()
-        elif event.key == "ctrl+t":
+        elif event.key == "t":
             tt = self.query_one(TrainingTab)
             tt.generate_ml_sql()
 
@@ -218,14 +223,6 @@ class TabsApp(App[None]):
             pass
         else:
             if event.pane.id == "tab-2":
-                self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
-                          show=True)
-                self.bind(keys="ctrl+t", action="training", description="Do training", key_display="ctr + t",
-                          show=False)
-                self.bind(keys="ctrl+o", action="pre_processing", description="Do Preprocessing", key_display="ctr + o",
-                          show=False)
-                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
-                          show=False)
                 self.refresh_bindings()
                 ex_sec = self.query_one("#ex_sec", Select)
                 ex_sec.clear()
@@ -234,13 +231,6 @@ class TabsApp(App[None]):
                     ex_sec_list = self.query_one("#ex_sec_list", SelectionList)
                     ex_sec_list.clear_options()
             elif event.pane.id == "tab-1":
-                self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
-                          show=False)
-                self.bind(keys="ctrl+t", action="training", description="Do training", key_display="ctr + t", show=True)
-                self.bind(keys="ctrl+o", action="pre_processing", description="Do Preprocessing", key_display="ctr + o",
-                          show=False)
-                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
-                          show=False)
                 self.refresh_bindings()
                 t_task_name = self.query_one("#t_task_name", Input)
                 t_task_name.value=""
@@ -251,31 +241,14 @@ class TabsApp(App[None]):
                 t_sel_list_target.clear_options()
 
             elif event.pane.id == "tab-3":
-                self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
-                          show=False)
-                self.bind(keys="ctrl+t", action="training", description="Do training", key_display="ctr + t",
-                          show=False)
-                self.bind(keys="ctrl+o", action="pre_processing", description="Create new table", key_display="ctr + o",
-                          show=True)
-                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
-                          show=False)
                 self.refresh_bindings()
 
             elif event.pane.id == "tab-4":
-                self.bind(keys="ctrl+p", action="predict", description="Do prediction", key_display="ctr + p",
-                          show=False)
-                self.bind(keys="ctrl+t", action="training", description="Do training", key_display="ctr + t",
-                          show=False)
-                self.bind(keys="ctrl+o", action="pre_processing", description="Create new table", key_display="ctr + o",
-                          show=False)
-                self.bind(keys="ctrl+a", action="analysis", description="analysis", key_display="ctr + a",
-                          show=True)
-                self.bind(keys="ctrl+h", action="apply_pandas_func", description="apply pandas function", key_display="ctr + h",
-                          show=True)
                 self.refresh_bindings()
 
 
 class TrainingTab(Static):
+        
     def __init__(self, conn) -> None:
         self.conn = conn
         super().__init__()
@@ -478,30 +451,6 @@ class PredictionTab(Static):
         table.add_rows(self.rows[1:])
         table.border_title = "Prediction Results:"
 
-        df = pd.DataFrame(self.rows[1:], columns=self.rows[0])
-        # sns.pairplot(df)
-        # plt.show()
-
-        # plt.figure(figsize=(10, 8))
-        # corr_matrix = df.corr()
-        # sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', vmin=-1, vmax=1)
-        # plt.title('Correlation Matrix')
-        # plt.show()
-    """
-        fig = plt.figure(figsize=(10, 8))
-        ax = fig.add_subplot(111, projection='3d')
-
-        # Scatter plot
-        ax.scatter(df['feature1'], df['feature2'], df['target'], c='r', marker='o')
-
-        # Labels
-        ax.set_xlabel('Feature 1')
-        ax.set_ylabel('Feature 2')
-        ax.set_zlabel('Target')
-
-        plt.title('3D Scatter Plot')
-        plt.show()
-    """
     def compose(self) -> ComposeResult:
         yield ScrollableContainer(Select([], id="ex_sec"), SelectionList(id="ex_sec_list"))
 

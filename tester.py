@@ -1,24 +1,56 @@
+# import sqlite3
+# from sqlite_ml.sqml import SQML
+# import re
+
+# if __name__ == '__main__':
+#     conn = sqlite3.connect("DBs/himeno_result_database_x_750.dat")
+#     # setup sqlite-ml extension
+#     sqml = SQML()
+#     sqml.setup_schema(conn)
+#     sqml.register_functions(conn)
+#     smtml = """SELECT
+#   himeno.*,
+#   batch.value AS prediction
+# FROM
+#   himeno
+# JOIN json_each (
+#   (
+#     SELECT
+#       sqml_predict_batch(
+#         'gradientb',
+#         json_group_array(
+#           json_object('SS_I', [SS_I], 'procs', [procs])
+#         )
+#       )from himeno
+#   )
+# ) AS batch ON (batch.rowid + 1) = himeno.rowid;
+# """
+#     print(smtml)
+#     results = conn.execute(smtml).fetchall()
+#     for idx, row in enumerate(results):
+#         print(tuple(row))
+#         print("---------%i-----------" %idx)
+#     #print(testot)
+
+
+
 import sqlite3
 from sqlite_ml.sqml import SQML
 import re
 
 if __name__ == '__main__':
-    conn = sqlite3.connect("/Users/flash/Desktop/real_result_database.dat")
+    conn = sqlite3.connect("DBs/himeno_result_database_x_750.dat")
     # setup sqlite-ml extension
     sqml = SQML()
     sqml.setup_schema(conn)
     sqml.register_functions(conn)
-    c_names = conn.execute("select name from pragma_table_info('results');").fetchall()
-    f_list = [(name[0], idx, True) for idx, name in enumerate(c_names)]
-    f_str = " json_array(" + ", ".join('[' + f[0] + ']' for f in f_list[:-1]) + ', ['+ f_list[-1][0] + '])'
-    f_str = " json_object(" + ", ".join(re.escape("'")+f[0]+re.escape("'")+', [' + f[0] + ']' for f in f_list[:-1]) + ',' + re.escape("'")+f_list[-1][0] +re.escape("'") +', [' + f_list[-1][0] + '])'
     smt ="""SELECT sqml_predict(
-        'mytest',
-        (
-            SELECT {f_str} FROM resultsMY
-            LIMIT 1
-        )
-    ) AS prediction;""".format(f_str=f_str)
+            'mytest',
+            (
+                SELECT {f_str} FROM resultsMY
+                LIMIT 1
+            )
+        ) AS prediction;""".format(f_str=f_str)
     print(smt)
 
     new_smt = """
@@ -90,7 +122,6 @@ LIMIT 1;""".format(f_str=f_str)
                                   )
                                   AS
                                   training;"""
-
     print(smtml)
     results = conn.execute(smtml).fetchall()
     for idx, row in enumerate(results):

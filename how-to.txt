@@ -6,3 +6,6 @@ pip install sklearn==1.2.2
 pip install scikit-learn==1.2.2
 python -c "import sklearn; sklearn.show_versions()"
 pip install sqlite_ml
+
+todo:
+https://textual.textualize.io/guide/actions/#__tabbed_4_1

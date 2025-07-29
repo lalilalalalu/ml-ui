@@ -450,9 +450,15 @@ class PredictionTab(Static):
         table.add_columns(*self.rows[0])
         table.add_rows(self.rows[1:])
         table.border_title = "Prediction Results:"
+        df = pd.DataFrame(self.rows[1:], columns=self.rows[0])
+        print(df.head())
+        plot_df = df[[self.predict_config['target'], 'prediction']]
+        # todo: plot the plot_df datamframe to compare the target and prediction
+        print("plot_df: ", plot_df.head())
 
     def compose(self) -> ComposeResult:
         yield ScrollableContainer(Select([], id="ex_sec"), SelectionList(id="ex_sec_list"))
+        # todo: add the plot of the metrics
 
     def on_mount(self) -> None:
         select = self.query_one("#ex_sec", Select)
@@ -488,6 +494,12 @@ class PredictionTab(Static):
                 pass
 
             sec_list.disabled = False
+            #todo: plot following metrics
+            smt = """SELECT name, value FROM sqml_metrics WHERE model_id IN 
+            ( SELECT model_id FROM sqml_runs INNER JOIN sqml_deployments ON sqml_runs.experiment_id = sqml_deployments.experiment_id  WHERE sqml_deployments.experiment_id = {ex_id});""".format(ex_id=select_ex['ex_id'])
+            print(smt)
+            metrics = self.conn.execute(smt).fetchall()
+
 
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:
@@ -598,7 +610,7 @@ class AnalysisTab(Static):
     selected_columns = []
     table = {'name': "", 'column_names': ['WRbwmaxMiB', 'WRbwminMiB'], "parent_table": "results", "lambda": "lambda x: x < 200"}
     df = pd.DataFrame()
-
+    df1 = pd.DataFrame()
     def __init__(self, conn) -> None:
         self.conn = conn
         super().__init__()
@@ -630,10 +642,17 @@ class AnalysisTab(Static):
     def compose(self) -> ComposeResult:
         yield ScrollableContainer(Input(id="a_lamda", value=self.table['lambda'], placeholder="apply lamda function..."), Select([], id="a_table_sec"))
         yield ScrollableContainer(SelectionList(id="a_table_sec_list"), Pretty(id="a_dv_pretty", object=None))
+        # todo: remove pretty and add the plot 
+        yield ScrollableContainer(Select([], id="a_column_sec"), Pretty(id="a_dv_pretty_new", object=None))
 
+    
     def on_mount(self) -> None:
         select = self.query_one("#a_table_sec", Select)
         select.border_title = "Origin table:"
+
+        select_col = self.query_one("#a_column_sec", Select)
+        select_col.border_title = "Select column:"
+
         select.set_options((line, line) for line in get_tables(self.conn))
         table_sec_list = self.query_one('#a_table_sec_list', SelectionList)
         table_sec_list.border_title = "Selected columns:"
@@ -654,11 +673,25 @@ class AnalysisTab(Static):
             sl = self.query_one("#a_table_sec_list", SelectionList)
             sl.clear_options()
             sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
-            print("pt_:",  self.table['parent_table'] )
+            cs = self.query_one('#a_column_sec', Select)
+            cs.clear()
+            cs.set_options((name[0], idx) for idx, name in enumerate(col_names))
             smt = "SELECT * from '{table}'".format(table=self.table['parent_table'])
             self.df = pd.read_sql_query(smt, self.conn)
             dv_pretty = self.query_one("#a_dv_pretty", Pretty)
             dv_pretty.update(self.df.describe())
+    
+    @on(Select.Changed, "#a_column_sec")
+    def select_changed_2(self, event: Select.Changed) -> None:
+        if event.value and (event.value != Select.BLANK):
+            sel_column = event.value
+            smt = "SELECT {sel_column} from '{table}'".format(sel_column=sel_column, table=self.table['parent_table'])
+            self.df1 = pd.read_sql_query(smt, self.conn)
+            # todo: update the plot using self.df1 instead of the pretty widget
+            dv_pretty = self.query_one("#a_dv_pretty_new", Pretty)
+            dv_pretty.update(self.df1.describe())
+
+
 
     @on(SelectionList.SelectedChanged)
     def update_selected_view(self) -> None:

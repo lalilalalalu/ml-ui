@@ -2,7 +2,6 @@ conda create -n test python=3.11
 conda activate test
 pip install numpy==1.26.4
 pip install scipy==1.11.4
-pip install sklearn==1.2.2
 pip install scikit-learn==1.2.2
 python -c "import sklearn; sklearn.show_versions()"
 pip install sqlite_ml

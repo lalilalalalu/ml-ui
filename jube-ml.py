@@ -675,7 +675,7 @@ class AnalysisTab(Static):
             sl.add_options([(name[0], idx, True) for idx, name in enumerate(col_names)])
             cs = self.query_one('#a_column_sec', Select)
             cs.clear()
-            cs.set_options((name[0], idx) for idx, name in enumerate(col_names))
+            cs.set_options((name[0], name[0]) for idx, name in enumerate(col_names))
             smt = "SELECT * from '{table}'".format(table=self.table['parent_table'])
             self.df = pd.read_sql_query(smt, self.conn)
             dv_pretty = self.query_one("#a_dv_pretty", Pretty)
